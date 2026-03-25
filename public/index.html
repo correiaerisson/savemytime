@@ -1,46 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Burn After Reading File Share</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; text-align: center; }
-        .result-container { margin-top: 30px; display: none; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
-        #qrcode { margin: 20px auto; width: 128px; }
-        a.link { color: #007bff; word-break: break-all; }
-        .error { color: red; margin-top: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            text-align: center;
+            color: #333;
+        }
+
+        .box {
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background: #fdfdfd;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .result-container {
+            margin-top: 20px;
+            display: none;
+            padding: 20px;
+            background: #e8f5e9;
+            border: 1px solid #c8e6c9;
+            border-radius: 8px;
+        }
+
+        #qrcode {
+            margin: 15px auto;
+            width: 128px;
+        }
+
+        a.link {
+            color: #007bff;
+            word-break: break-all;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #d32f2f;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .code-display {
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 5px;
+            color: #d32f2f;
+            margin: 10px 0;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 1rem;
+            margin-top: 10px;
+        }
+
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: #6c757d;
+            font-size: 0.9rem;
+            padding: 8px 15px;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            font-size: 1.5rem;
+            letter-spacing: 3px;
+            text-align: center;
+            width: 200px;
+            text-transform: uppercase;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+
+        hr {
+            border: 0;
+            height: 1px;
+            background: #eee;
+            margin: 30px 0;
+        }
     </style>
 </head>
+
 <body>
 
-    <h2>Secure One-Time File Upload</h2>
-    <p>Upload a Text, Image, or Audio file (Max 50MB).</p>
+    <h2>🔥 Burn After Reading</h2>
+    <p>Files self-destruct after 1 download or 5 minutes.</p>
 
-    <input type="file" id="fileInput" accept="image/*, audio/*, text/*, application/pdf">
-    <button onclick="uploadFile()">Upload File</button>
-    <div id="errorMsg" class="error"></div>
+    <div class="box">
+        <h3>Receive a File</h3>
+        <p>Enter a 6-character code to download.</p>
+        <input type="text" id="codeInput" maxlength="6" placeholder="XXXXXX">
+        <br>
+        <button onclick="downloadWithCode()">Connect & Download</button>
+        <div id="receiveError" class="error"></div>
+    </div>
 
-    <div class="result-container" id="resultContainer">
-        <h3>Success! Here is your one-time link:</h3>
-        <p><a id="fileLink" class="link" href="#" target="_blank"></a></p>
-        <p><strong>Warning:</strong> This link will permanently expire after it is clicked once.</p>
-        <div id="qrcode"></div>
+    <div class="box">
+        <h3>Send a File</h3>
+        <p>Max 50MB (Text, Image, Audio, PDF).</p>
+        <input type="file" id="fileInput" accept="image/*, audio/*, text/*, application/pdf">
+        <br><br>
+        <button id="uploadBtn" onclick="uploadFile()">Upload File</button>
+        <div id="uploadErrorMsg" class="error"></div>
+
+        <div class="result-container" id="resultContainer">
+            <h3 style="margin-top: 0; color: #2e7d32;">Success!</h3>
+            <p>Your connection code is:</p>
+            <div class="code-display" id="shortCodeDisplay"></div>
+
+            <p>Or share this one-time link:</p>
+            <p><a id="fileLink" class="link" href="#" target="_blank"></a></p>
+            <button class="secondary" onclick="copyLink()">📋 Copy Link</button>
+
+            <div id="qrcode"></div>
+            <p style="font-size: 0.85rem; color: #555;">Warning: File is deleted permanently after first access.</p>
+        </div>
     </div>
 
     <script>
+        // --- UPLOAD LOGIC ---
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
-            const errorMsg = document.getElementById('errorMsg');
+            const errorMsg = document.getElementById('uploadErrorMsg');
             const resultContainer = document.getElementById('resultContainer');
             const fileLink = document.getElementById('fileLink');
             const qrcodeDiv = document.getElementById('qrcode');
+            const codeDisplay = document.getElementById('shortCodeDisplay');
+            const uploadBtn = document.getElementById('uploadBtn');
 
             // Reset UI
             errorMsg.innerText = '';
             resultContainer.style.display = 'none';
-            qrcodeDiv.innerHTML = ''; 
+            qrcodeDiv.innerHTML = '';
 
             if (fileInput.files.length === 0) {
                 return errorMsg.innerText = "Please select a file.";
@@ -48,10 +158,13 @@
 
             const file = fileInput.files[0];
 
-            // Client-side validation: 50MB
             if (file.size > 50 * 1024 * 1024) {
                 return errorMsg.innerText = "File exceeds the 50MB limit.";
             }
+
+            // LOADING STATE
+            uploadBtn.innerText = "Uploading...";
+            uploadBtn.disabled = true;
 
             const formData = new FormData();
             formData.append('file', file);
@@ -65,9 +178,10 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Show link
+                    // Update UI with link and short code
                     fileLink.href = data.url;
                     fileLink.innerText = data.url;
+                    codeDisplay.innerText = data.code; // Display the 6-char code
                     resultContainer.style.display = 'block';
 
                     // Generate QR Code
@@ -81,8 +195,47 @@
                 }
             } catch (err) {
                 errorMsg.innerText = "Network error occurred.";
+            } finally {
+                // REMOVE LOADING STATE
+                uploadBtn.innerText = "Upload File";
+                uploadBtn.disabled = false;
             }
+        }
+
+        // --- COPY TO CLIPBOARD ---
+        function copyLink() {
+            const link = document.getElementById('fileLink').href;
+            navigator.clipboard.writeText(link).then(() => {
+                alert("Link copied to clipboard!");
+            }).catch(err => {
+                console.error("Failed to copy", err);
+            });
+        }
+
+        // --- RECEIVE LOGIC ---
+        function downloadWithCode() {
+            const codeInput = document.getElementById('codeInput').value.trim().toUpperCase();
+            const receiveError = document.getElementById('receiveError');
+
+            receiveError.innerText = "";
+
+            if (codeInput.length !== 6) {
+                receiveError.innerText = "Please enter a valid 6-character code.";
+                return;
+            }
+
+            // 1. Trigger the download
+            window.location.href = `/download/${codeInput}`;
+
+            // 2. Clear the input field immediately
+            document.getElementById('codeInput').value = '';
+
+            // 3. Refresh the page after a 1.5-second delay so the download isn't interrupted
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         }
     </script>
 </body>
+
 </html>
