@@ -35,14 +35,28 @@ const upload = multer({
 // Note: For production, use Redis or a real database
 const fileStore = new Map();
 
+// Function to generate a random 6-character code
+function generateShortCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
 // Route: Upload 1 single file
 app.post('/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded or invalid file type.' });
     }
 
-    // Generate random ID
-    const fileId = uuidv4();
+    // Generate a unique 6-character ID
+    let fileId = generateShortCode();
+    // Ensure it's unique (extremely rare to collide, but good practice)
+    while (fileStore.has(fileId)) {
+        fileId = generateShortCode();
+    }
     
     // Store file info
     fileStore.set(fileId, {
@@ -50,10 +64,23 @@ app.post('/upload', upload.single('file'), (req, res) => {
         originalName: req.file.originalname
     });
 
-    // Create the access URL
+    // Create the access URL using the short code
     const accessUrl = `${req.protocol}://${req.get('host')}/download/${fileId}`;
     
-    res.json({ url: accessUrl });
+    // 5-Minute Self-Destruct Timer
+    setTimeout(() => {
+        if (fileStore.has(fileId)) {
+            const fileInfo = fileStore.get(fileId);
+            fs.unlink(fileInfo.path, (err) => {
+                if (err) console.error("Error auto-deleting file:", err);
+            });
+            fileStore.delete(fileId);
+            console.log(`Time's up! File ${fileId} auto-destroyed.`);
+        }
+    }, 5 * 60 * 1000);
+
+    // Send back both the URL and the raw code
+    res.json({ url: accessUrl, code: fileId });
 });
 
 // Route: Download and Burn
